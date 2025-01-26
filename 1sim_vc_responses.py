@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+"""
+1sim_vc_responses.py
+- Generates startup descriptions using prompts from 'VC Design Grid.csv' via OpenAI API.
+- Computes text embeddings and cosine similarities for the generated startups.
+- Simulates VC responses based on loaded VC contexts and saves results to CSV files.
+"""
+
 import os
 import time
 import pandas as pd
@@ -80,7 +88,7 @@ class VCSimulator:
             for company in range(1, 11):
                 desc = df.loc[row, f'Response_{company}']
                 response = self.client.chat.completions.create(
-                    model="gpt-4",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": f"You are {vc_name}. Use this context for decisions:\n{vc_context}"},
                         {"role": "user", "content": f"Evaluate this startup:\n{desc}"}
@@ -108,10 +116,10 @@ def main():
     
     # Get VC responses
     
-    marc_context = simulator.load_vc_context('decode(venturing)/Pmarca Blog Archives.pdf')
+    marc_context = simulator.load_vc_context('Pmarca Blog Archives.pdf')
     marc_responses = simulator.get_vc_responses(startups_df, marc_context, "Marc Andreessen")
     
-    bill_context = simulator.load_vc_context('decode(venturing)/bill gurley.md')
+    bill_context = simulator.load_vc_context('bill gurley.md')
     bill_responses = simulator.get_vc_responses(startups_df, bill_context, "Bill Gurley")
     
     # Save outputs
