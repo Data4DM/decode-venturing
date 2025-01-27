@@ -1,107 +1,106 @@
-#!/usr/bin/env python3
-
-import os
-import time
+import numpy as np
 import pandas as pd
-from itertools import product
-from VCSimulator import VCSimulator  # Assuming VCSimulator is in VCSimulator.py
-from subprocess import run
+from typing import Dict, List
+from dataclasses import dataclass
+
+# using [Investor Classification Framework for Pathfinding](https://claude.ai/chat/37933b85-ebce-4099-9886-196ad36ec653)
+@dataclass
+class Investor:
+    id: str
+    capacity: float
+    idea_weight: float
+    execution_weight: float
+
+@dataclass
+class Founder:
+    id: str
+    capital_needed: float
+    idea_signals: Dict[str, float]
+    execution_signals: Dict[str, float]
 
 class PathFindingAlgorithm:
-    def __init__(self, api_key: str, design_grid_path: str, vc_context_files: dict):
-        """
-        Initialize the Path-Finding Algorithm.
+    def __init__(self, investors: List[Investor], founders: List[Founder]):
+        self.investors = investors
+        self.founders = founders
+        self.state_space = ['idea', 'execution']
+        self.matches = pd.DataFrame()
+        
+    def compute_benefit(self, investor: Investor, founder: Founder) -> float:
+        idea_score = sum(founder.idea_signals.values()) * investor.idea_weight
+        execution_score = sum(founder.execution_signals.values()) * investor.execution_weight
+        return idea_score + execution_score
+    
+    def find_paths(self, max_iterations: int = 10, epsilon: float = 0.01):
+        # Initialize matching distribution
+        n_investors = len(self.investors)
+        n_founders = len(self.founders)
+        pi = np.ones((n_investors, n_founders)) / (n_investors * n_founders)
+        
+        for t in range(max_iterations):
+            # Step 2: Primal (Path-Finding)
+            benefits = np.zeros((n_investors, n_founders))
+            for i, investor in enumerate(self.investors):
+                for f, founder in enumerate(self.founders):
+                    benefits[i,f] = self.compute_benefit(investor, founder)
+            
+            # Optimize matching (simplified version)
+            pi_new = self._optimize_matching(pi, benefits)
+            
+            # Step 3: State Elicitation/Certification
+            certified_paths = self._certify_paths(pi_new)
+            
+            # Step 4: Augment state space if needed
+            if not all(certified_paths):
+                self._augment_state_space()
+                continue
+                
+            if np.all(np.abs(pi_new - pi) < epsilon):
+                break
+                
+            pi = pi_new
+            
+        self.matches = self._convert_to_dataframe(pi)
+        return self.matches
+    
+    def _optimize_matching(self, pi, benefits):
+        # Simplified matching optimization
+        # In practice, use linear programming solver
+        return pi * benefits / np.sum(pi * benefits)
+    
+    def _certify_paths(self, pi):
+        # Check if matches satisfy investor constraints
+        return [True] * pi.shape[0]  # Simplified
+    
+    def _augment_state_space(self):
+        # Add more granular signal interpretation
+        self.state_space.append('market_validation')
+    
+    def _convert_to_dataframe(self, pi):
+        matches = []
+        for i, investor in enumerate(self.investors):
+            for f, founder in enumerate(self.founders):
+                if pi[i,f] > 0.01:  # Threshold
+                    matches.append({
+                        'investor_id': investor.id,
+                        'founder_id': founder.id,
+                        'match_probability': pi[i,f],
+                        'idea_score': sum(founder.idea_signals.values()),
+                        'execution_score': sum(founder.execution_signals.values())
+                    })
+        return pd.DataFrame(matches)
 
-        :param api_key: OpenAI API key.
-        :param design_grid_path: Path to the CSV file containing startup prompts.
-        :param vc_context_files: Dictionary mapping VC names to their context file paths.
-        """
-        self.simulator = VCSimulator(api_key)
-        self.design_grid_path = design_grid_path
-        self.vc_context_files = vc_context_files
-        self.vc_contexts = {vc: self.simulator.load_vc_context(path) 
-                            for vc, path in vc_context_files.items()}
-    
-    def generate_startups(self):
-        """Generate startup descriptions."""
-        print("Generating startup descriptions...")
-        startups_df = self.simulator.generate_startup_descriptions(self.design_grid_path)
-        startups_df.to_csv('path_finding_startups.csv', index=False)
-        print("Startup descriptions generated and saved to 'path_finding_startups.csv'.")
-        return startups_df
-    
-    def simulate_vc_responses(self, startups_df):
-        """Simulate VC responses for each startup."""
-        all_vc_responses = []
-        for vc_name, context in self.vc_contexts.items():
-            print(f"Simulating responses from {vc_name}...")
-            responses = self.simulator.get_vc_responses(startups_df, context, vc_name)
-            all_vc_responses.append(responses)
-        combined_responses = pd.concat(all_vc_responses)
-        combined_responses.to_csv('path_finding_vc_responses.csv', index=False)
-        print("VC responses simulated and saved to 'path_finding_vc_responses.csv'.")
-        return combined_responses
-    
-    def calibrate_model(self):
-        """Calibrate the model using the two-step calibration script."""
-        print("Calibrating model using two-step calibration...")
-        # Assuming the two-step calibration script is executable and in the same directory
-        run(["python3", "2sim_based_2step_calib.py"], check=True)
-        print("Calibration completed.")
-    
-    def plot_diagnostics(self):
-        """Plot calibration diagnostics."""
-        print("Plotting calibration diagnostics...")
-        run(["python3", "3plot_diagnostics.py"], check=True)
-        print("Diagnostics plotted.")
-    
-    def adjust_strategy(self):
-        """
-        Adjust the path based on calibration results.
-        This is a placeholder for strategy adjustment logic.
-        For example, prioritize startups with higher predicted investment probabilities.
-        """
-        print("Adjusting strategy based on calibration results...")
-        # Load calibration results
-        calibrated_df = pd.read_csv('decode-venturing/two_step_stan_output.csv')
-        # Example adjustment: Select top 10% startups based on predicted probabilities
-        # (This requires extracting posterior means from calibration)
-        # Placeholder implementation:
-        # TODO: Implement actual strategy adjustment based on calibration
-        print("Strategy adjusted. (Implementation pending)")
-    
-    def run(self, iterations=5):
-        """Run the Path-Finding Algorithm for a specified number of iterations."""
-        for i in range(iterations):
-            print(f"\n--- Iteration {i+1} ---")
-            # Step 1: Generate startups
-            startups_df = self.generate_startups()
-            
-            # Step 2: Simulate VC responses
-            vc_responses = self.simulate_vc_responses(startups_df)
-            
-            # Step 3: Calibrate model
-            self.calibrate_model()
-            
-            # Step 4: Plot diagnostics
-            self.plot_diagnostics()
-            
-            # Step 5: Adjust strategy based on calibration
-            self.adjust_strategy()
-            
-            print(f"--- Iteration {i+1} completed ---\n")
-            time.sleep(2)  # Pause between iterations
-
-def main():
-    api_key = os.getenv("OPENAI_API_KEY")
-    design_grid_path = 'VC Design Grid.csv'
-    vc_context_files = {
-        "Marc Andreessen": 'Pmarca Blog Archives.pdf',
-        "Bill Gurley": 'bill gurley.md'
-    }
-    
-    path_finder = PathFindingAlgorithm(api_key, design_grid_path, vc_context_files)
-    path_finder.run(iterations=3)  # Run for 3 iterations as an example
-
-if __name__ == "__main__":
-    main()
+    def elicit_states(self, match_data):
+        """Analyze patterns in successful/failed matches"""
+        pattern_data = []
+        for _, match in match_data.iterrows():
+            successful = match['successful']
+            # Extract patterns in investor preferences
+            pattern = {
+                'investor_type': match['investor_type'],
+                'sector': match['sector'],
+                'stage': match['stage'],
+                'success': successful
+            }
+            pattern_data.append(pattern)
+        
+        return pd.DataFrame(pattern_data)
