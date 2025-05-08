@@ -2,3 +2,10 @@
 /lib/*
 *.env
 *.csv
+*.js
+*.map
+*.json
+*.css
+*.jsx
+*.ts
+founder/node_modules/*
