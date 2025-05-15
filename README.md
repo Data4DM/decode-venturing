@@ -1,5 +1,3 @@
-
-```markdown
 # decode-venturing
 
 **decode-venturing** is a powerful toolkit designed to help entrepreneurs refine their startup strategies by simulating venture capitalist (VC) responses, calibrating predictive models, and visualizing key diagnostics. This project leverages AI and Bayesian statistics to align startup ideas with investor preferences, enhancing the likelihood of securing funding.
